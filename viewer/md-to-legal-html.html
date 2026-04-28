@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markdown → Legal Document</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root {
+    --brick: #B84A2B;
+    --brick-light: #D4613E;
+    --gold: #C8A415;
+    --dark: #1a1a1a;
+    --heading: #111111;
+    --text: #2c2c2c;
+    --gray-bg: #f7f7f5;
+    --card-border: #e2e0dc;
+    --link: #2c2c2c;
+    --table-header: #555;
+    --muted: #777;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.75;
+    color: var(--text);
+    background: #fff;
+  }
+
+  /* ══════════ EDITOR MODE ══════════ */
+  .editor-wrap {
+    max-width: 70em;
+    margin: 0 auto;
+    padding: 2em;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  .editor-header {
+    display: flex;
+    align-items: center;
+    gap: 1em;
+    margin-bottom: 1em;
+    flex-wrap: wrap;
+  }
+  .editor-header h1 {
+    font-size: 1.3em;
+    font-weight: 700;
+    color: var(--heading);
+    flex: 1;
+  }
+  .editor-header h1 span { color: var(--brick); }
+
+  .settings {
+    display: flex;
+    gap: 0.8em;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 1em;
+    padding: 0.8em 1em;
+    background: var(--gray-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    font-size: 0.85em;
+  }
+  .settings label {
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 0.78em;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .settings input[type="text"] {
+    font-family: inherit;
+    font-size: 0.95em;
+    padding: 0.3em 0.6em;
+    border: 1px solid var(--card-border);
+    border-radius: 3px;
+    flex: 1;
+    min-width: 120px;
+  }
+  .settings input[type="text"]:focus { outline: 2px solid var(--brick); border-color: var(--brick); }
+
+  textarea#md-input {
+    flex: 1;
+    min-height: 400px;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 1.2em;
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    resize: vertical;
+    color: var(--text);
+    background: #fff;
+    tab-size: 2;
+  }
+  textarea#md-input:focus { outline: 2px solid var(--brick); border-color: var(--brick); }
+
+  .editor-actions {
+    display: flex;
+    gap: 0.5em;
+    margin-top: 1em;
+    flex-wrap: wrap;
+  }
+
+  /* ══════════ BUTTONS ══════════ */
+  .btn {
+    font-family: inherit;
+    font-size: 0.85em;
+    padding: 0.5em 1.2em;
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    cursor: pointer;
+    background: #fff;
+    color: var(--text);
+    transition: all 0.15s;
+  }
+  .btn:hover { background: var(--gray-bg); border-color: #bbb; }
+  .btn-primary {
+    background: var(--brick);
+    color: #fff;
+    border-color: var(--brick);
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: var(--brick-light); border-color: var(--brick-light); }
+  .btn.success { background: #d4edda; color: #155724; border-color: #b1dfbb; }
+
+  .drop-hint {
+    text-align: center;
+    padding: 0.5em;
+    font-size: 0.82em;
+    color: var(--muted);
+  }
+
+  /* ══════════ RENDERED VIEW ══════════ */
+  .view-wrap { display: none; }
+  .view-wrap.active { display: block; }
+  .editor-wrap.hidden { display: none; }
+
+  .top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #fff;
+    border-bottom: 1px solid var(--card-border);
+    padding: 0.5em 2em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5em;
+  }
+  .top-bar-left { display: flex; gap: 0.5em; }
+  .top-bar-right { display: flex; gap: 0.5em; }
+
+  .rendered-body {
+    max-width: 54em;
+    margin: 0 auto;
+    padding: 2em 2em 5em;
+  }
+
+  /* ── Category line ── */
+  .category {
+    font-size: 0.78em;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.8em;
+  }
+
+  /* ── Main title (h1) ── */
+  #content h1 {
+    font-size: 2.4em;
+    font-weight: 700;
+    color: var(--heading);
+    line-height: 1.2;
+    margin: 0 0 0.15em;
+    border: none;
+    padding: 0;
+  }
+  .subtitle {
+    font-size: 0.95em;
+    color: var(--muted);
+    margin-bottom: 2em;
+  }
+
+  /* ── SOMMAIRE ── */
+  .sommaire {
+    border: 1px solid var(--card-border);
+    border-top: 3px solid var(--brick);
+    padding: 1.5em 2em;
+    margin: 2em 0 3em;
+  }
+  .sommaire-title {
+    font-size: 0.78em;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--dark);
+    margin-bottom: 1em;
+  }
+  .sommaire ol {
+    list-style: none;
+    padding: 0;
+    counter-reset: sommaire;
+  }
+  .sommaire li {
+    counter-increment: sommaire;
+    padding: 0.25em 0;
+    font-size: 0.95em;
+    line-height: 1.5;
+  }
+  .sommaire li a { color: var(--text); text-decoration: none; border: none; }
+  .sommaire li a:hover { color: var(--brick); }
+  .sommaire li::before {
+    content: counter(sommaire, upper-roman) ".";
+    font-weight: 700;
+    color: var(--brick);
+    display: inline-block;
+    width: 2.5em;
+  }
+
+  /* ── h2 → PARTIE ── */
+  #content h2 {
+    font-size: 1.85em;
+    font-weight: 700;
+    color: var(--heading);
+    line-height: 1.25;
+    margin: 3em 0 0.3em;
+    padding: 0 0 0.35em;
+    border: none;
+    border-bottom: 3px solid var(--brick);
+  }
+  .partie-label {
+    display: block;
+    font-size: 0.42em;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--brick);
+    margin-bottom: 0.3em;
+    line-height: 1;
+  }
+
+  /* ── h3 → ■ cards ── */
+  .card {
+    border: 1px solid var(--card-border);
+    border-radius: 2px;
+    padding: 1.5em 1.8em;
+    margin: 1.5em 0;
+    background: #fff;
+  }
+  .card .card { background: var(--gray-bg); border-color: #d8d6d2; }
+  .card .card .card { background: #fff; }
+
+  #content h3 {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: var(--heading);
+    margin: 0 0 0.8em;
+    padding: 0;
+    border: none;
+  }
+  #content h3::before {
+    content: "\25A0";
+    color: var(--brick);
+    margin-right: 0.4em;
+    font-size: 0.75em;
+    vertical-align: 0.08em;
+  }
+
+  #content p { margin: 0.7em 0; }
+  #content a { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
+  #content a:hover { color: var(--brick); }
+  #content strong { color: var(--heading); }
+  #content hr { border: none; margin: 0; padding: 0; height: 0; }
+  #content ul { margin: 0.6em 0; padding-left: 1.5em; }
+  #content ol { margin: 0.6em 0; padding-left: 2.2em; }
+  #content li { margin: 0.35em 0; }
+  #content li::marker { color: var(--brick); }
+  #content blockquote {
+    border-left: 4px solid var(--gold);
+    background: var(--gray-bg);
+    padding: 1.2em 1.5em;
+    margin: 1em 0;
+    font-style: normal;
+  }
+  #content pre {
+    background: var(--gray-bg);
+    border: 1px solid var(--card-border);
+    padding: 1em 1.2em;
+    overflow-x: auto;
+    font-size: 0.88em;
+    border-radius: 2px;
+    margin: 1em 0;
+  }
+  #content code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.88em;
+  }
+  #content p > code, #content li > code {
+    background: var(--gray-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 2px;
+    border: 1px solid var(--card-border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+    font-size: 0.88em;
+  }
+  thead th {
+    font-size: 0.78em;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--table-header);
+    padding: 0.7em 0.8em;
+    text-align: left;
+    border-bottom: 2px solid #ccc;
+    background: none;
+  }
+  tbody td {
+    padding: 0.55em 0.8em;
+    border-bottom: 1px solid var(--card-border);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: 2px solid #ccc; }
+
+  .footer-note {
+    margin-top: 3em;
+    padding-top: 1.5em;
+    border-top: 1px solid var(--card-border);
+    font-size: 0.82em;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* ── Print ── */
+  @page {
+    margin: 2cm 2.2cm;
+    size: A4;
+  }
+  @media print {
+    .top-bar, .editor-wrap { display: none !important; }
+    .view-wrap { display: block !important; }
+    body { font-size: 10.5pt; line-height: 1.6; }
+    .rendered-body { max-width: none; padding: 0; }
+    .card { break-inside: avoid; }
+    .sommaire { break-inside: avoid; }
+    #content h2 { break-before: page; }
+    #content h3 { break-after: avoid; }
+    p, li { orphans: 3; widows: 3; }
+    blockquote { break-inside: avoid; }
+
+    /* Links: render as plain text */
+    a { color: var(--text); text-decoration: none; }
+
+    table { font-size: 8pt; }
+  }
+
+  @media (max-width: 640px) {
+    .editor-wrap, .rendered-body { padding: 1em; }
+    #content h1 { font-size: 1.7em; }
+    #content h2 { font-size: 1.4em; }
+    .card { padding: 1em 1.2em; }
+    .top-bar { padding: 0.5em 1em; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════ EDITOR ══════════ -->
+<div class="editor-wrap" id="editor">
+  <div class="editor-header">
+    <h1><span>&#9632;</span> Markdown → Document juridique</h1>
+  </div>
+
+  <div class="settings">
+    <label>Bandeau</label>
+    <input type="text" id="cfg-category" value="Guide stratégique — Droit des sûretés" placeholder="Ex: Guide stratégique — Droit des sûretés">
+    <label>Sous-titre</label>
+    <input type="text" id="cfg-subtitle" value="Analyse juridique — Février 2026" placeholder="Ex: Analyse juridique — Février 2026">
+  </div>
+
+  <textarea id="md-input" placeholder="Collez votre markdown ici...
+
+# Titre principal
+
+Paragraphe d'introduction...
+
+---
+
+## Première section
+
+Contenu...
+
+### Sous-section
+
+Détails...
+
+---
+
+## Deuxième section
+
+..." spellcheck="false"></textarea>
+
+  <div class="drop-hint">Glissez-déposez un fichier .md ou collez du texte, puis cliquez Aperçu</div>
+
+  <div class="editor-actions">
+    <button class="btn btn-primary" onclick="renderPreview()">&#9654; Aperçu</button>
+    <button class="btn" onclick="loadSample()">Charger un exemple</button>
+    <label class="btn" style="margin:0">
+      Importer .md
+      <input type="file" accept=".md,.markdown,.txt" style="display:none" onchange="loadFile(event)">
+    </label>
+  </div>
+</div>
+
+<!-- ══════════ RENDERED VIEW ══════════ -->
+<div class="view-wrap" id="view">
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <button class="btn" onclick="backToEditor()">&#9664; Modifier</button>
+    </div>
+    <div class="top-bar-right">
+      <button class="btn" id="copyBtn" onclick="copyMarkdown()">Copier le Markdown</button>
+      <button class="btn" id="exportBtn" onclick="exportHTML()">Exporter HTML</button>
+      <button class="btn" onclick="window.print()">Imprimer / PDF</button>
+    </div>
+  </div>
+  <div class="rendered-body">
+    <div class="category" id="view-category"></div>
+    <div id="content"></div>
+    <div class="footer-note" id="view-footer"></div>
+  </div>
+</div>
+
+<script>
+// ── Drag & drop ──
+var textarea = document.getElementById('md-input');
+textarea.addEventListener('dragover', function(e) { e.preventDefault(); textarea.style.borderColor = '#B84A2B'; });
+textarea.addEventListener('dragleave', function() { textarea.style.borderColor = ''; });
+textarea.addEventListener('drop', function(e) {
+  e.preventDefault();
+  textarea.style.borderColor = '';
+  var file = e.dataTransfer.files[0];
+  if (file) {
+    var reader = new FileReader();
+    reader.onload = function(ev) { textarea.value = ev.target.result; };
+    reader.readAsText(file);
+  }
+});
+
+// ── Tab key in textarea ──
+textarea.addEventListener('keydown', function(e) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    var s = this.selectionStart, end = this.selectionEnd;
+    this.value = this.value.substring(0, s) + '  ' + this.value.substring(end);
+    this.selectionStart = this.selectionEnd = s + 2;
+  }
+});
+
+// ── Load .md file ──
+function loadFile(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) { textarea.value = ev.target.result; };
+  reader.readAsText(file);
+}
+
+// ── Sample ──
+function loadSample() {
+  textarea.value = '# La fiducie-sûreté : guide stratégique\n\n**La fiducie-sûreté reste la garantie la plus robuste du droit français.** Fondée sur un transfert de propriété, elle isole le collatéral dans un patrimoine d\'affectation autonome.\n\n---\n\n## Le mécanisme juridique\n\nLa fiducie a été introduite par la **loi n° 2007-211 du 19 février 2007**. L\'[article 2011 du Code civil](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006445338) la définit comme l\'opération par laquelle un constituant transfère des biens à un fiduciaire.\n\n### Conditions de constitution\n\nLe contrat de fiducie doit comporter, **à peine de nullité**, six mentions obligatoires : les biens transférés, la durée du transfert (maximum 99 ans), l\'identité des parties, et la mission du fiduciaire.\n\n### Les parties au contrat\n\nLa qualité de **fiduciaire** est réservée aux établissements de crédit, entreprises d\'investissement, entreprises d\'assurance et avocats.\n\n---\n\n## Pourquoi la fiducie domine les autres sûretés\n\nLa supériorité repose sur la distinction : **droit de propriété** versus **droit de préférence**.\n\n### Comparaison avec l\'hypothèque\n\nL\'hypothèque confère un droit de préférence, mais le bien reste dans le patrimoine du débiteur. Sa réalisation passe par une **saisie immobilière judiciaire** durant 12 à 24 mois.\n\n---\n\n## Conclusion\n\nLa fiducie-sûreté mérite sa qualification doctrinale de « reine des sûretés ».';
+}
+
+// ── Render ──
+var currentMd = '';
+
+function renderPreview() {
+  currentMd = textarea.value.trim();
+  if (!currentMd) { alert('Collez du markdown d\'abord.'); return; }
+
+  var category = document.getElementById('cfg-category').value;
+  var subtitle = document.getElementById('cfg-subtitle').value;
+
+  // Render
+  document.getElementById('view-category').textContent = category;
+  document.getElementById('content').innerHTML = marked.parse(currentMd);
+  document.getElementById('view-footer').innerHTML =
+    '<strong>Avertissement.</strong> Ce document est un guide d\'analyse. Il ne constitue pas un avis juridique. ' +
+    'Toute mise en \u0153uvre doit \u00eatre valid\u00e9e par un avocat sp\u00e9cialis\u00e9.';
+
+  postProcess(subtitle);
+
+  // Switch view
+  document.getElementById('editor').classList.add('hidden');
+  document.getElementById('view').classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function backToEditor() {
+  document.getElementById('editor').classList.remove('hidden');
+  document.getElementById('view').classList.remove('active');
+}
+
+// ── Post-processing ──
+function postProcess(subtitleText) {
+  var content = document.getElementById('content');
+  var roman = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV'];
+
+  // Remove HTML comment nodes
+  var walker = document.createTreeWalker(content, NodeFilter.SHOW_COMMENT, null, false);
+  var comments = [];
+  while (walker.nextNode()) comments.push(walker.currentNode);
+  comments.forEach(function(c) { c.parentNode.removeChild(c); });
+
+  // Collect h2s
+  var h2s = content.querySelectorAll('h2');
+  var tocItems = [];
+  var idx = 0;
+
+  h2s.forEach(function(h2) {
+    var id = 'partie-' + (idx + 1);
+    h2.id = id;
+    var label = document.createElement('span');
+    label.className = 'partie-label';
+    label.textContent = 'Partie ' + roman[idx];
+    h2.insertBefore(label, h2.firstChild);
+    tocItems.push({ id: id, text: h2.textContent.replace('Partie ' + roman[idx], '').trim() });
+    idx++;
+  });
+
+  // Subtitle after h1
+  var h1 = content.querySelector('h1');
+  if (h1 && subtitleText) {
+    var sub = document.createElement('div');
+    sub.className = 'subtitle';
+    sub.textContent = subtitleText;
+    h1.insertAdjacentElement('afterend', sub);
+  }
+
+  // SOMMAIRE
+  if (tocItems.length > 1) {
+    var introEnd = null;
+    var node = h1 ? h1.nextElementSibling : null;
+    // skip subtitle div
+    if (node && node.classList && node.classList.contains('subtitle')) node = node.nextElementSibling;
+    while (node && node.tagName !== 'HR' && node.tagName !== 'H2') {
+      introEnd = node;
+      node = node.nextElementSibling;
+    }
+
+    var sommaire = document.createElement('div');
+    sommaire.className = 'sommaire';
+    var st = document.createElement('div');
+    st.className = 'sommaire-title';
+    st.textContent = 'Sommaire';
+    sommaire.appendChild(st);
+    var ol = document.createElement('ol');
+    tocItems.forEach(function(item) {
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + item.id;
+      a.textContent = item.text;
+      li.appendChild(a);
+      ol.appendChild(li);
+    });
+    sommaire.appendChild(ol);
+
+    var insertAfter = introEnd || (h1 ? h1.nextElementSibling : null);
+    if (insertAfter && insertAfter.nextSibling) {
+      content.insertBefore(sommaire, insertAfter.nextSibling);
+    } else if (h2s[0]) {
+      content.insertBefore(sommaire, h2s[0]);
+    }
+  }
+
+  // Wrap h3 in cards
+  var h3s = Array.from(content.querySelectorAll('h3'));
+  h3s.forEach(function(h3) {
+    var card = document.createElement('div');
+    card.className = 'card';
+    h3.parentNode.insertBefore(card, h3);
+    card.appendChild(h3);
+    while (card.nextSibling) {
+      var sib = card.nextSibling;
+      if (!sib) break;
+      if (sib.nodeType === 1) {
+        var tag = sib.tagName;
+        if (tag === 'H2' || tag === 'H3' || tag === 'HR' || (tag === 'DIV' && (sib.classList.contains('card') || sib.classList.contains('sommaire')))) break;
+      }
+      card.appendChild(sib);
+    }
+  });
+
+  // Remove hrs
+  content.querySelectorAll('hr').forEach(function(hr) { hr.remove(); });
+}
+
+// ── Copy markdown ──
+function copyMarkdown() {
+  var btn = document.getElementById('copyBtn');
+  navigator.clipboard.writeText(currentMd).then(function() {
+    btn.textContent = 'Copié !';
+    btn.classList.add('success');
+    setTimeout(function() { btn.textContent = 'Copier le Markdown'; btn.classList.remove('success'); }, 2000);
+  }, function() {
+    var ta = document.createElement('textarea');
+    ta.value = currentMd;
+    ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = 'Copié !';
+    btn.classList.add('success');
+    setTimeout(function() { btn.textContent = 'Copier le Markdown'; btn.classList.remove('success'); }, 2000);
+  });
+}
+
+// ── Export standalone HTML ──
+function exportHTML() {
+  var category = document.getElementById('cfg-category').value;
+  var subtitle = document.getElementById('cfg-subtitle').value;
+  var escaped = currentMd.replace(/<\/script>/gi, '<\\/script>');
+
+  var html = '<!DOCTYPE html>\n<html lang="fr">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+
+  // Extract title from first h1
+  var titleMatch = currentMd.match(/^#\s+(.+)$/m);
+  var title = titleMatch ? titleMatch[1].replace(/\*\*/g,'').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1') : 'Document';
+  html += '<title>' + title + '</title>\n';
+  html += '<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>\n';
+
+  // Grab all styles
+  var styles = document.querySelector('style').textContent;
+  // Remove editor-specific styles (keep everything, the editor is hidden in export)
+  html += '<style>\n' + styles + '\n.editor-wrap{display:none!important}.view-wrap{display:block!important}\n</style>\n';
+  html += '</head>\n<body>\n\n';
+
+  html += '<div class="top-bar">\n  <div class="top-bar-left"></div>\n  <div class="top-bar-right">\n';
+  html += '    <button class="btn" id="copyBtn" onclick="copyMarkdown()">Copier le Markdown</button>\n';
+  html += '    <button class="btn" onclick="window.print()">Imprimer / PDF</button>\n';
+  html += '  </div>\n</div>\n\n';
+
+  html += '<div class="rendered-body">\n';
+  html += '  <div class="category">' + category.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</div>\n';
+  html += '  <div id="content"></div>\n';
+  html += '  <div class="footer-note"><strong>Avertissement.</strong> Ce document est un guide d\'analyse. Il ne constitue pas un avis juridique.</div>\n';
+  html += '</div>\n\n';
+
+  html += '<script id="raw-md" type="text/markdown">\n' + escaped + '\n<\/script>\n\n';
+
+  // Inline the render + post-process logic
+  html += '<script>\n';
+  html += 'var mdSource=document.getElementById("raw-md").textContent;\n';
+  html += 'document.getElementById("content").innerHTML=marked.parse(mdSource);\n';
+  html += '(function(){var c=document.getElementById("content"),r=["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV"];\n';
+  html += 'var w=document.createTreeWalker(c,128,null,false),cm=[];while(w.nextNode())cm.push(w.currentNode);cm.forEach(function(n){n.parentNode.removeChild(n)});\n';
+  html += 'var h2s=c.querySelectorAll("h2"),ti=[],idx=0;\n';
+  html += 'h2s.forEach(function(h){var id="partie-"+(idx+1);h.id=id;var l=document.createElement("span");l.className="partie-label";l.textContent="Partie "+r[idx];h.insertBefore(l,h.firstChild);ti.push({id:id,text:h.textContent.replace("Partie "+r[idx],"").trim()});idx++;});\n';
+  html += 'var h1=c.querySelector("h1");if(h1){var s=document.createElement("div");s.className="subtitle";s.textContent=' + JSON.stringify(subtitle) + ';h1.insertAdjacentElement("afterend",s);}\n';
+  html += 'if(ti.length>1){var ie=null,n=h1?h1.nextElementSibling:null;if(n&&n.classList&&n.classList.contains("subtitle"))n=n.nextElementSibling;while(n&&n.tagName!=="HR"&&n.tagName!=="H2"){ie=n;n=n.nextElementSibling;}\n';
+  html += 'var sm=document.createElement("div");sm.className="sommaire";var st=document.createElement("div");st.className="sommaire-title";st.textContent="Sommaire";sm.appendChild(st);var ol=document.createElement("ol");\n';
+  html += 'ti.forEach(function(t){var li=document.createElement("li"),a=document.createElement("a");a.href="#"+t.id;a.textContent=t.text;li.appendChild(a);ol.appendChild(li);});sm.appendChild(ol);\n';
+  html += 'var ia=ie||(h1?h1.nextElementSibling:null);if(ia&&ia.nextSibling)c.insertBefore(sm,ia.nextSibling);else if(h2s[0])c.insertBefore(sm,h2s[0]);}\n';
+  html += 'Array.from(c.querySelectorAll("h3")).forEach(function(h){var d=document.createElement("div");d.className="card";h.parentNode.insertBefore(d,h);d.appendChild(h);while(d.nextSibling){var s=d.nextSibling;if(!s)break;if(s.nodeType===1){var t=s.tagName;if(t==="H2"||t==="H3"||t==="HR"||(t==="DIV"&&(s.classList.contains("card")||s.classList.contains("sommaire"))))break;}d.appendChild(s);}});\n';
+  html += 'c.querySelectorAll("hr").forEach(function(h){h.remove();});\n';
+  html += '})();\n';
+  html += 'function copyMarkdown(){var b=document.getElementById("copyBtn"),m=document.getElementById("raw-md").textContent.trim();navigator.clipboard.writeText(m).then(function(){b.textContent="Copié !";b.classList.add("success");setTimeout(function(){b.textContent="Copier le Markdown";b.classList.remove("success");},2000);});}\n';
+  html += '<\/script>\n\n</body>\n</html>';
+
+  // Download
+  var blob = new Blob([html], { type: 'text/html' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = (title.substring(0, 50).replace(/[^a-zA-Z0-9àâäéèêëïîôùûüÿçœæ -]/gi, '') || 'document') + '.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
+
+</body>
+</html>
